@@ -116,13 +116,17 @@ def privacy_info(user: User = Depends(get_current_user)):
     s = get_settings()
     return {
         "data_region": s.data_region,
+        "data_region_ar": s.data_region_ar,
         "encryption_at_rest": "AES-256-GCM (integration tokens, IBANs, phone numbers)",
+        "encryption_at_rest_ar": "AES-256-GCM (رموز الربط، أرقام الآيبان، أرقام الجوال)",
         "password_hashing": "scrypt (N=16384, r=8, p=1)",
         "transport": "TLS 1.2+ required in production",
         "bank_access": "Read-only via SAMA open banking providers (OAuth 2.0 + PKCE)",
+        "bank_access_ar": "قراءة فقط عبر مزودي المصرفية المفتوحة المرخّصين من ساما (OAuth 2.0 + PKCE)",
         "consent_recorded_at": user.pdpl_consent_at,
         "retention": "Bank and accounting data is deleted when you disconnect an integration or delete the account.",
         "frameworks": ["SAMA Cyber Security Framework", "Saudi PDPL", "SAMA Open Banking Framework"],
+        "frameworks_ar": ["الإطار التنظيمي للأمن السيبراني (ساما)", "نظام حماية البيانات الشخصية", "إطار المصرفية المفتوحة (ساما)"],
     }
 
 

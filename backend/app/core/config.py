@@ -38,12 +38,19 @@ class Settings(BaseSettings):
 
     # Where the SPA lives (used for OAuth redirects back to the app).
     frontend_url: str = "http://localhost:5173"
-    # Public URL of this API (used to build sandbox OAuth authorize URLs).
-    api_url: str = "http://localhost:8000"
+    # Public base URL of this API for sandbox OAuth authorize URLs. Empty means
+    # same-origin (relative URLs), which works behind the Vite proxy and when the
+    # API serves the built SPA.
+    api_url: str = ""
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     # PDPL: data residency label surfaced in the UI and exports.
     data_region: str = "KSA — Riyadh (me-central-1)"
+    data_region_ar: str = "المملكة العربية السعودية — الرياض (me-central-1)"
+
+    # Brute-force protection: failed logins allowed per email+IP per window.
+    login_max_attempts: int = 5
+    login_window_seconds: int = 300
 
     # Notifications. Empty values mean "sandbox": messages are recorded in the
     # notification log instead of being delivered.

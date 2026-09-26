@@ -44,7 +44,8 @@ def evaluate_alerts(db: Session, company: Company) -> list[Alert]:
     inputs = build_inputs(db, company)
     if not inputs.history:
         return []
-    result = run_forecast(inputs, 90, baseline=baseline_for(db, company, inputs), n_sims=400)
+    # Same horizon, simulation count and seed as the dashboard, so alerts and KPIs agree exactly.
+    result = run_forecast(inputs, 90, baseline=baseline_for(db, company, inputs))
     m, series = result["metrics"], result["series"]
     now = today()
     conditions: dict[str, dict] = {}

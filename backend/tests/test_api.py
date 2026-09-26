@@ -193,3 +193,11 @@ def test_company_settings_validation(client):
     assert client.put("/api/company", json={"vat_number": "123"}, headers=h).status_code == 422
     ok = client.put("/api/company", json={"vat_number": "300000000000003", "min_cash_buffer": 75000}, headers=h)
     assert ok.status_code == 200 and ok.json()["min_cash_buffer"] == 75000
+
+
+def test_login_is_throttled_after_repeated_failures(client):
+    register(client, "throttle@test.sa")
+    for _ in range(5):
+        assert client.post("/api/auth/login", json={"email": "throttle@test.sa", "password": "wrong-pass"}).status_code == 401
+    r = client.post("/api/auth/login", json={"email": "throttle@test.sa", "password": "password123"})
+    assert r.status_code == 429

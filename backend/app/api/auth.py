@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import time
+from collections import defaultdict, deque
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
-from ..core.config import today
+from ..core.config import get_settings, today
 from ..core.db import get_db
 from ..core.security import create_access_token, hash_password, verify_password
 from ..models import Company, User, utcnow
@@ -89,12 +91,35 @@ def register(body: RegisterIn, request: Request, db: Session = Depends(get_db)):
     return TokenOut(access_token=create_access_token(user.id, company.id))
 
 
+_failed_logins: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+
+
+def _throttle_key(request: Request, email: str) -> tuple[str, str]:
+    return (request.client.host if request.client else "?", email)
+
+
+def _recent_failures(key: tuple[str, str]) -> deque[float]:
+    window = get_settings().login_window_seconds
+    q = _failed_logins[key]
+    now = time.monotonic()
+    while q and now - q[0] > window:
+        q.popleft()
+    return q
+
+
 @router.post("/login", response_model=TokenOut)
 def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
+    key = _throttle_key(request, body.email.lower())
+    failures = _recent_failures(key)
+    if len(failures) >= get_settings().login_max_attempts:
+        audit(db, request, None, "auth.login_throttled", body.email.lower())
+        raise HTTPException(429, "Too many failed attempts — try again in a few minutes")
     user = db.query(User).filter(User.email == body.email.lower()).first()
     if user is None or not verify_password(body.password, user.password_hash):
+        failures.append(time.monotonic())
         audit(db, request, None, "auth.login_failed", body.email.lower())
         raise HTTPException(401, "Incorrect email or password")
+    _failed_logins.pop(key, None)
     if user.email == "demo@siyulah.sa":
         user = seed_demo(db)  # re-anchors the demo story if it has gone stale
     user.last_login_at = utcnow()

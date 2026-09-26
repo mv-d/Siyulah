@@ -12,9 +12,12 @@ def sar_en(amount: float) -> str:
     return f"SAR {abs(amount):,.0f}" if amount >= 0 else f"-SAR {abs(amount):,.0f}"
 
 
+LRI, PDI = "\u2066", "\u2069"  # bidi isolates keep "-1,200" intact inside Arabic text
+
+
 def sar_ar(amount: float) -> str:
     sign = "-" if amount < 0 else ""
-    return f"{sign}{abs(amount):,.0f} ر.س"
+    return f"{LRI}{sign}{abs(amount):,.0f}{PDI} ر.س"
 
 
 def date_en(d: date) -> str:

@@ -81,8 +81,11 @@ def seed_demo(db: Session, force: bool = False) -> User:
         scenarios.append(
             Scenario(
                 company_id=company.id,
-                name="Al-Ofoq pays 15 days late",
-                description=f"What if the {ofoq.amount:,.0f} SAR invoice {ofoq.number} is paid 15 days late?",
+                name="تأخر «الأفق» 15 يوماً · Al-Ofoq pays 15 days late",
+                description=(
+                    f"ماذا لو سُددت الفاتورة {ofoq.number} بقيمة {ofoq.amount:,.0f} ر.س متأخرة 15 يوماً؟ · "
+                    f"What if the {ofoq.amount:,.0f} SAR invoice {ofoq.number} is paid 15 days late?"
+                ),
                 adjustments=[{"type": "delay_receivable", "invoice_id": ofoq.id, "days": 15, "label": ofoq.number}],
             )
         )
@@ -90,8 +93,8 @@ def seed_demo(db: Session, force: bool = False) -> User:
         scenarios.append(
             Scenario(
                 company_id=company.id,
-                name="Pay VAT a week later",
-                description="What if we settle the quarterly ZATCA VAT one week later?",
+                name="سداد الضريبة بعد أسبوع · Pay VAT a week later",
+                description="ماذا لو سددنا ضريبة القيمة المضافة للربع بعد أسبوع؟ · What if we settle the quarterly ZATCA VAT one week later?",
                 adjustments=[{"type": "shift_obligation", "obligation_id": vat.id, "days": 7, "label": vat.name}],
             )
         )
@@ -99,8 +102,8 @@ def seed_demo(db: Session, force: bool = False) -> User:
     scenarios.append(
         Scenario(
             company_id=company.id,
-            name="Soft White Friday (-25% sales)",
-            description="Stress test: White Friday sales come in 25% below last year's pattern.",
+            name="جمعة بيضاء أضعف (‎-25%) · Soft White Friday",
+            description="اختبار ضغط: مبيعات الجمعة البيضاء أقل بـ 25% من نمط العام الماضي · Stress test: White Friday sales 25% below last year's pattern.",
             adjustments=[
                 {
                     "type": "revenue_change",

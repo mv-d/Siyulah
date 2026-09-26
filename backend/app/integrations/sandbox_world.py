@@ -87,7 +87,11 @@ class Profile:
     company_en: str
     company_ar: str
     city: str
-    anchor_balance: float
+    # The opening balance is calibrated so the company's true cash low over the
+    # next 90 days lands near this value: every sandbox company starts in a
+    # realistic "tight month", whatever day it joins.
+    future_low_target: float
+    min_anchor_balance: float
     pos_base: float = 0.0
     online_base: float = 0.0
     daily_opex: float = 0.0
@@ -112,7 +116,8 @@ RETAIL = Profile(
     company_en="Nakhla Perfumes & Oud",
     company_ar="نخلة للعطور والعود",
     city="Riyadh",
-    anchor_balance=224_400,
+    future_low_target=-12_000,
+    min_anchor_balance=60_000,
     pos_base=5_300,
     online_base=2_450,
     daily_opex=420,
@@ -175,7 +180,8 @@ SERVICES = Profile(
     company_en="Wamda Creative Agency",
     company_ar="ومضة للإبداع والتسويق",
     city="Jeddah",
-    anchor_balance=386_000,
+    future_low_target=70_000,
+    min_anchor_balance=150_000,
     daily_opex=780,
     growth=0.15,
     payroll_steps=((-400, 232_000), (-230, 247_500), (-70, 262_400)),
@@ -495,6 +501,17 @@ class SandboxWorld:
         return txns
 
     @cached_property
+    def anchor_balance(self) -> float:
+        inv = self._invoice_txns()
+        running, low = 0.0, 0.0
+        for i in range(1, 91):
+            d = self.anchor + timedelta(days=i)
+            running += sum(t.amount for t in self._day_txns(d)) + sum(t.amount for t in inv.get(d, []))
+            low = min(low, running)
+        target = self.profile.future_low_target - low
+        return float(max(self.profile.min_anchor_balance, round(target, -2)))
+
+    @cached_property
     def distributions(self) -> dict[date, float]:
         """Partner profit distributions that keep historical balances realistic.
 
@@ -510,7 +527,7 @@ class SandboxWorld:
             nets[d] = sum(t.amount for t in self._day_txns(d)) + sum(t.amount for t in inv.get(d, []))
             d += timedelta(days=1)
         draws: dict[date, float] = {}
-        b = self.profile.anchor_balance
+        b = self.anchor_balance
         d = self.anchor
         while d > self.origin:
             b -= nets[d]  # balance at end of d - 1
@@ -578,7 +595,7 @@ class SandboxWorld:
         return sum(t.amount for t in self.transactions(start, end, account))
 
     def balance(self, as_of: date, account: str = "operating") -> float:
-        anchor_balance = self.profile.anchor_balance if account == "operating" else 75_000.0
+        anchor_balance = self.anchor_balance if account == "operating" else 75_000.0
         if as_of >= self.anchor:
             return round(anchor_balance + self._net(self.anchor + timedelta(days=1), as_of, account), 2)
         return round(anchor_balance - self._net(as_of + timedelta(days=1), self.anchor, account), 2)

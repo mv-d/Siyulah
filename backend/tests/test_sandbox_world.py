@@ -19,7 +19,7 @@ def test_iban_checksum():
 
 def test_balances_reconcile_with_transactions():
     w = SandboxWorld(1, "retail", ANCHOR)
-    assert w.balance(ANCHOR) == w.profile.anchor_balance
+    assert w.balance(ANCHOR) == w.anchor_balance
     d1, d2 = ANCHOR - timedelta(days=120), ANCHOR + timedelta(days=20)
     net = sum(t.amount for t in w.transactions(d1 + timedelta(days=1), d2))
     assert abs(w.balance(d2) - w.balance(d1) - net) < 0.05

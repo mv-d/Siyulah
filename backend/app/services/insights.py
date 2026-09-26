@@ -201,11 +201,13 @@ def suggest_actions(inputs: ForecastInputs, result: dict, baseline: Baseline, ho
 
     suggestions = []
     for _, en, ar, adjs in candidates:
-        r = run_forecast(inputs, horizon, adjs, n_sims=300, baseline=baseline)
+        # Same simulation count and seed as the baseline run, so the difference is the lever alone.
+        r = run_forecast(inputs, horizon, adjs, n_sims=result["model"]["simulations"], baseline=baseline)
         sm = r["metrics"]
         gain = sm["lowest_balance"] - m["lowest_balance"]
         risk_drop = m["shortfall_probability"] - sm["shortfall_probability"]
-        if gain > 1_000 or risk_drop > 0.02:
+        # Keep levers that help and never raise the risk of going negative.
+        if risk_drop >= 0 and (gain > 1_000 or risk_drop > 0.02):
             suggestions.append(
                 {
                     "kind": adjs[0]["type"],

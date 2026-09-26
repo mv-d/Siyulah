@@ -137,3 +137,16 @@ def test_future_invoices_phase_in():
     first_month = sum(s["inflow"] for s in r["series"][:28])
     last_month = sum(s["inflow"] for s in r["series"][-28:])
     assert last_month > first_month + 30_000
+
+
+def test_earlier_collection_never_lowers_the_forecast():
+    """Common random numbers: a scenario differs from the baseline only by the scenario."""
+    rec = ReceivableInput(1, "INV-1", "Slow Co", date(2026, 8, 1), 80_000, delays=[60, 70, 75, 90])
+    ob = ObligationInput(2, "payroll", "Payroll", 150_000, "monthly", date(2026, 10, 27))
+    inputs = make_inputs(receivables=[rec], obligations=[ob])
+    base = run_forecast(inputs, 90)
+    early = run_forecast(inputs, 90, [{"type": "expect_receivable", "invoice_id": 1, "date": "2026-10-01"}])
+    for b, e in zip(base["series"], early["series"]):
+        if b["date"] >= date(2026, 10, 1):
+            assert e["p50"] >= b["p50"] - 1e-6
+    assert early["metrics"]["shortfall_probability"] <= base["metrics"]["shortfall_probability"]

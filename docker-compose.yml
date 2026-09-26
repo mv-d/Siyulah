@@ -1,0 +1,15 @@
+services:
+  siyulah:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # Generate your own for anything beyond a local demo:
+      #   python -c "import secrets,base64;print(base64.b64encode(secrets.token_bytes(32)).decode())"
+      SIYULAH_ENCRYPTION_KEY: ${SIYULAH_ENCRYPTION_KEY:-}
+      SIYULAH_JWT_SECRET: ${SIYULAH_JWT_SECRET:-}
+      SIYULAH_FRONTEND_URL: ${SIYULAH_FRONTEND_URL:-http://localhost:8000}
+    volumes:
+      - siyulah-data:/app/backend/data
+volumes:
+  siyulah-data:
