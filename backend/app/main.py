@@ -107,6 +107,8 @@ if FRONTEND_DIST.exists():
 
     @app.get("/{path:path}", include_in_schema=False)
     def spa(path: str):
+        if path == "api" or path.startswith("api/"):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
         candidate = FRONTEND_DIST / path
         if path and candidate.is_file() and FRONTEND_DIST in candidate.resolve().parents:
             return FileResponse(candidate)
