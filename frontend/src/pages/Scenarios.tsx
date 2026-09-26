@@ -400,7 +400,11 @@ export function ScenariosPage() {
             </div>
           </section>
 
-          {preview.error && <div className="callout critical small">{(preview.error as Error).message}</div>}
+          {preview.error && (
+            <div className={`callout small ${(preview.error as { status?: number }).status === 418 ? "brand" : "critical"}`}>
+              {(preview.error as { status?: number }).status === 418 ? t("preview.scenarioMiss") : (preview.error as Error).message}
+            </div>
+          )}
 
           {r && bm && sm ? (
             <>

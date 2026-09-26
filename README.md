@@ -118,6 +118,16 @@ Every setting is an environment variable with the `SIYULAH_` prefix (see `backen
 - **Frontend:** `npm run build` (strict TypeScript).
 - **End to end:** start the app, then `cd frontend && BASE_URL=http://127.0.0.1:8000 node e2e/smoke.mjs`. It walks through every page in both languages, dark mode and a 390px phone. It also registers a company and connects a bank and Qoyod through the consent screens, and it fails on any console error or horizontal overflow.
 
+### Static preview
+
+The app can also be packaged as one self-contained HTML file that needs no server. The recorder drives the real app and stores every API response it makes; the preview build replays them. Reads work everywhere, and scenario results are pre-computed for the saved scenarios, the suggestions and one change of each type. Writes are disabled.
+
+```bash
+./scripts/start.sh &                                   # the real app on :8000
+cd frontend && BASE_URL=http://127.0.0.1:8000 npm run preview:record
+npm run build:preview                                  # → dist-preview/preview.html
+```
+
 ## Going live
 
 The provider boundary is `ProviderClient` in `backend/app/integrations/providers.py` (authorize URL, code exchange, refresh, accounts, transactions, invoices). Swapping the sandbox for a live partner means:

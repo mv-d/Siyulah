@@ -9,6 +9,7 @@ export class ApiError extends Error {
 }
 
 export function getToken(): string | null {
+  if (window.__SIYULAH_PREVIEW__) return "preview";
   try {
     return localStorage.getItem(TOKEN_KEY);
   } catch {
@@ -28,6 +29,8 @@ export function setToken(token: string | null) {
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export async function api<T = unknown>(path: string, opts: { method?: Method; body?: unknown } = {}): Promise<T> {
+  const preview = window.__SIYULAH_PREVIEW__;
+  if (preview) return (await preview.handle(opts.method ?? "GET", path, opts.body)) as T;
   const headers: Record<string, string> = {};
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -57,6 +60,8 @@ export async function api<T = unknown>(path: string, opts: { method?: Method; bo
 }
 
 export async function download(path: string, filename: string) {
+  // The static preview can't serve files; compile the save path out of that build.
+  if (import.meta.env.VITE_PREVIEW) throw new ApiError(418, "preview");
   const token = getToken();
   const res = await fetch(`/api${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
   if (!res.ok) throw new ApiError(res.status, res.statusText);

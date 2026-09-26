@@ -2,6 +2,7 @@ import type { Formatters } from "../i18n";
 
 /** Today's date in Saudi Arabia (Asia/Riyadh), as YYYY-MM-DD. */
 export function todayRiyadh(): string {
+  if (window.__SIYULAH_PREVIEW__) return window.__SIYULAH_PREVIEW__.today;
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
@@ -20,7 +21,8 @@ export function daysBetween(a: string, b: string): number {
 export function relTime(iso: string | null | undefined, t: (k: string, p?: Record<string, string | number>) => string): string {
   if (!iso) return t("common.never");
   const then = new Date(iso.endsWith("Z") ? iso : iso + "Z").getTime();
-  const mins = Math.round((Date.now() - then) / 60_000);
+  const now = window.__SIYULAH_PREVIEW__?.now ?? Date.now();
+  const mins = Math.round((now - then) / 60_000);
   if (mins < 1) return t("time.justNow");
   if (mins < 60) return t("time.minutesAgo", { n: mins });
   const hours = Math.round(mins / 60);

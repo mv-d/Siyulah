@@ -400,6 +400,11 @@ export const en = {
     savedToast: "Settings saved",
     passwordToast: "Password updated",
   },
+  preview: {
+    banner: "Interactive preview · real forecasts recorded from the Siyulah engine for the demo company · changes aren't saved",
+    scenarioMiss: "This preview has pre-computed results for the saved scenarios, the suggested actions and one change of each type. Run the app to test any combination.",
+    readOnly: "Read-only preview. Run the app to save changes.",
+  },
   time: { justNow: "just now", minutesAgo: "{n} min ago", hoursAgo: "{n} h ago", daysAgo: "{n} days ago" },
 };
 

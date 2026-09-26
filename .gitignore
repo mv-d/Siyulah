@@ -21,3 +21,5 @@ frontend/playwright-report/
 .idea/
 .vscode/
 *.tsbuildinfo
+frontend/dist-preview/
+frontend/src/preview/fixtures.json

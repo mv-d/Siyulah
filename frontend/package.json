@@ -8,7 +8,9 @@
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "preview": "vite preview",
-    "e2e": "node e2e/smoke.mjs"
+    "e2e": "node e2e/smoke.mjs",
+    "preview:record": "node e2e/record-fixtures.mjs",
+    "build:preview": "vite build -c vite.preview.config.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-sans-arabic": "^5.3.0",
@@ -24,6 +26,7 @@
     "@vitejs/plugin-react": "^4.7.0",
     "playwright-core": "^1.63.0",
     "typescript": "^5.9.3",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vite-plugin-singlefile": "^2.3.3"
   }
 }
