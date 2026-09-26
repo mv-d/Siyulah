@@ -339,19 +339,37 @@ def _event(d: date, kind: str, en: str, ar: str, amount: float, ref: str | None 
     return {"date": d, "kind": kind, "label_en": en, "label_ar": ar, "amount": round(amount, 2), "ref": ref, **extra}
 
 
-def run_forecast(
+@dataclass
+class Draws:
+    """Every random draw of one Monte Carlo run, before any scenario is applied.
+
+    Scenarios only rescale, shift or add to these draws, so re-using one set of
+    draws gives exact common random numbers, and exporting it lets another runtime
+    (the browser preview) reproduce the server's results.
+    """
+
+    dates: list[date]
+    base_in: np.ndarray  # (n_sims, horizon): learned day-to-day inflows + future-invoice pipeline
+    base_out: np.ndarray
+    pipeline: dict[str, float]
+    # Per receivable: sampled days-from-today of payment (before any scenario shift) and
+    # whether it gets paid at all; None when the user already set an expected date.
+    receivables: dict[int, tuple[np.ndarray, np.ndarray] | None]
+
+    @property
+    def n_sims(self) -> int:
+        return self.base_in.shape[0]
+
+
+def draw_simulations(
     inputs: ForecastInputs,
     horizon: int = 90,
-    adjustments: list[dict] | None = None,
     n_sims: int = 500,
     seed: int = 20240923,
     baseline: Baseline | None = None,
-) -> dict:
-    adjustments = adjustments or []
+) -> Draws:
     today = inputs.today
-    end = today + timedelta(days=horizon)
     dates = [today + timedelta(days=i + 1) for i in range(horizon)]
-    index = {d: i for i, d in enumerate(dates)}
     baseline = baseline or build_baseline(inputs)
 
     # 1) Baseline day-to-day flows ------------------------------------------------
@@ -379,6 +397,60 @@ def run_forecast(
         target += counts * rr_rng.choice(rr.amounts, size=(n_sims, horizon))
         pipeline[cat] = float((rr.daily_mean * weight).sum())
 
+    # 2) Receivables: sampled from each customer's payment behaviour --------------
+    company_delays = inputs.company_delays if len(inputs.company_delays) >= 3 else DEFAULT_DELAYS
+    samples: dict[int, tuple[np.ndarray, np.ndarray] | None] = {}
+    for r in inputs.receivables:
+        if r.outstanding <= 0:
+            continue
+        if r.expected_date:
+            samples[r.id] = None
+            continue
+        r_rng = np.random.default_rng([seed, 1, r.id])
+        overdue = (today - r.due_date).days
+        pool = np.asarray(r.delays if len(r.delays) >= 3 else company_delays)
+        if overdue > 0:
+            # Condition on what we already know: it has not been paid yet.
+            remaining = pool[pool > overdue]
+            # Later than this customer usually pays: a long, uncertain tail.
+            tail = overdue + r_rng.geometric(1 / 14, size=n_sims)
+            if len(remaining):
+                known = r_rng.choice(remaining, size=n_sims) + r_rng.integers(-2, 3, size=n_sims)
+                # Thin evidence (1-2 later payments) gets blended with the tail.
+                use_tail = r_rng.random(n_sims) < (0.5 if len(remaining) < 3 else 0.0)
+                delays = np.where(use_tail, tail, known)
+            else:
+                delays = tail
+            delays = np.maximum(delays, overdue + 1)
+        else:
+            delays = r_rng.choice(pool, size=n_sims) + r_rng.integers(-2, 3, size=n_sims)
+        # Long-overdue invoices carry a real chance of not paying within the horizon.
+        p_default = 0.0 if overdue <= 60 else min(0.6, 0.25 + (overdue - 60) / 200)
+        paid_mask = r_rng.random(n_sims) >= p_default
+        samples[r.id] = ((r.due_date - today).days + delays, paid_mask)
+
+    return Draws(dates, base_in, base_out, pipeline, samples)
+
+
+def run_forecast(
+    inputs: ForecastInputs,
+    horizon: int = 90,
+    adjustments: list[dict] | None = None,
+    n_sims: int = 500,
+    seed: int = 20240923,
+    baseline: Baseline | None = None,
+    draws: Draws | None = None,
+) -> dict:
+    adjustments = adjustments or []
+    today = inputs.today
+    end = today + timedelta(days=horizon)
+    dates = [today + timedelta(days=i + 1) for i in range(horizon)]
+    index = {d: i for i, d in enumerate(dates)}
+    baseline = baseline or build_baseline(inputs)
+    draws = draws or draw_simulations(inputs, horizon, n_sims, seed, baseline)
+    n_sims = draws.n_sims
+    base_in, base_out, pipeline = draws.base_in.copy(), draws.base_out.copy(), draws.pipeline
+
     for adj in adjustments:
         t = adj.get("type")
         if t in ("revenue_change", "expense_change"):
@@ -401,40 +473,19 @@ def run_forecast(
     written_off = {int(a["invoice_id"]) for a in adjustments if a.get("type") == "write_off_receivable"}
     collect_on = {int(a["invoice_id"]): _as_date(a.get("date")) for a in adjustments if a.get("type") == "expect_receivable"}
 
-    # 2) Receivables — sampled from each customer's payment behaviour -------------
-    company_delays = inputs.company_delays if len(inputs.company_delays) >= 3 else DEFAULT_DELAYS
+    # 3) Receivables: the sampled payment days, shifted or pinned by the scenario ---
     receivable_view = []
     for r in inputs.receivables:
         if r.outstanding <= 0 or r.id in written_off:
             continue
         shift = delay_shift.get(r.id, 0)
-        r_rng = np.random.default_rng([seed, 1, r.id])
-        overdue = (today - r.due_date).days
         expected_date = collect_on.get(r.id) or r.expected_date
         if expected_date:
             pay_days = np.full(n_sims, (expected_date - today).days + shift)
             paid_mask = np.ones(n_sims, dtype=bool)
         else:
-            pool = np.asarray(r.delays if len(r.delays) >= 3 else company_delays)
-            if overdue > 0:
-                # Condition on what we already know: it has not been paid yet.
-                remaining = pool[pool > overdue]
-                # Later than this customer usually pays: a long, uncertain tail.
-                tail = overdue + r_rng.geometric(1 / 14, size=n_sims)
-                if len(remaining):
-                    known = r_rng.choice(remaining, size=n_sims) + r_rng.integers(-2, 3, size=n_sims)
-                    # Thin evidence (1-2 later payments) gets blended with the tail.
-                    use_tail = r_rng.random(n_sims) < (0.5 if len(remaining) < 3 else 0.0)
-                    delays = np.where(use_tail, tail, known)
-                else:
-                    delays = tail
-                delays = np.maximum(delays, overdue + 1)
-            else:
-                delays = r_rng.choice(pool, size=n_sims) + r_rng.integers(-2, 3, size=n_sims)
-            pay_days = (r.due_date - today).days + delays + shift
-            # Long-overdue invoices carry a real chance of not paying within the horizon.
-            p_default = 0.0 if overdue <= 60 else min(0.6, 0.25 + (overdue - 60) / 200)
-            paid_mask = r_rng.random(n_sims) >= p_default
+            raw, paid_mask = draws.receivables[r.id]
+            pay_days = raw + shift
         pay_days = np.maximum(pay_days, 1)
         in_window = paid_mask & (pay_days <= horizon)
         rows = np.nonzero(in_window)[0]
@@ -465,7 +516,7 @@ def run_forecast(
                 )
             )
 
-    # 3) Payables — paid on the due date (or the planned date) -------------------
+    # 4) Payables — paid on the due date (or the planned date) -------------------
     for p in inputs.payables:
         if p.outstanding <= 0:
             continue
@@ -479,7 +530,7 @@ def run_forecast(
             _event(d, "payable", f"{p.counterparty} — {p.number}", f"{p.counterparty_ar or p.counterparty} — {p.number}", -p.outstanding, f"invoice:{p.id}")
         )
 
-    # 4) Obligations: payroll, rent, VAT, GOSI, zakat, loans ---------------------
+    # 5) Obligations: payroll, rent, VAT, GOSI, zakat, loans ---------------------
     for ob in inputs.obligations:
         if ob.id in skipped:
             continue
@@ -487,7 +538,7 @@ def run_forecast(
             det_out[index[d]] += ob.amount
             events.append(_event(d, ob.kind, ob.name, ob.name_ar or ob.name, -ob.amount, f"obligation:{ob.id}"))
 
-    # 5) Scenario-only items ------------------------------------------------------
+    # 6) Scenario-only items ------------------------------------------------------
     for n_adj, adj in enumerate(adjustments):
         t = adj.get("type")
         label = str(adj.get("label") or "")
@@ -523,7 +574,7 @@ def run_forecast(
                     det_out[index[d]] += installment
                     events.append(_event(d, "scenario", (label or "Financing") + " — installment", (label or "التمويل") + " — قسط", -installment, f"adj:{n_adj}"))
 
-    # 6) Simulate balances -----------------------------------------------------------
+    # 7) Simulate balances -----------------------------------------------------------
     inflow = base_in + recv + det_in[None, :]
     outflow = base_out + det_out[None, :]
     paths = inputs.opening_balance + np.cumsum(inflow - outflow, axis=1)

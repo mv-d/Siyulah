@@ -25,6 +25,7 @@ from ..models import (
     User,
 )
 from ..services.alerts import evaluate_alerts
+from ..services.seed import DEMO_EMAILS
 from .deps import audit, get_company, get_current_user
 
 router = APIRouter(prefix="/api", tags=["settings"])
@@ -187,7 +188,7 @@ def delete_account(
     """PDPL right to erasure: remove the company and all its data."""
     if not verify_password(body.password, user.password_hash):
         raise HTTPException(400, "Password is incorrect")
-    if user.email == "demo@siyulah.sa":
+    if user.email in DEMO_EMAILS:
         raise HTTPException(400, "The shared demo account cannot be deleted")
     audit(db, request, None, "privacy.account_deleted", f"company {company.id}", company_id=None)
     db.delete(company)

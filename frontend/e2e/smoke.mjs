@@ -100,6 +100,52 @@ const step = (s) => console.log(`• ${s}`);
   await ctx.close();
 }
 
+// 1b) New features: agency demo, collections, cash activity, guided stories
+{
+  const { ctx, page } = await newPage({ locale: "ar-SA" });
+  await page.goto(`${BASE}/login`);
+  await page.click("[data-testid=demo-services]");
+  await page.waitForSelector("[data-testid=cash-on-hand]", { timeout: 20000 });
+  await page.click('a.nav-item[href="/collections"]');
+  await page.waitForSelector("[data-testid=draft-reminder]");
+  await page.waitForTimeout(300);
+  await shot(page, "21-collections-agency-ar");
+  await page.locator("[data-testid=draft-reminder]").first().click();
+  await page.waitForSelector("#reminder-text");
+  const text = await page.inputValue("#reminder-text");
+  if (!text.includes("السلام عليكم")) errors.push("Arabic reminder text missing greeting");
+  await shot(page, "22-reminder-ar", false);
+  await page.keyboard.press("Escape");
+  await page.click('a.nav-item[href="/activity"]');
+  await page.waitForSelector(".cat-row");
+  await page.waitForTimeout(300);
+  await shot(page, "23-activity-agency-ar");
+  step("agency demo: collections, reminder, cash activity");
+
+  for (const id of ["services", "retail"]) {
+    await page.click("[data-testid=story-menu]");
+    await page.click(`.story-menu .story-card >> nth=${id === "retail" ? 0 : 1}`);
+    await page.waitForSelector(".story-panel");
+    let n = 0;
+    while (true) {
+      await page.waitForLoadState("networkidle");
+      await page.waitForTimeout(900);
+      const text = await page.locator(".story-panel .text").innerText();
+      if (text.includes("…") || text.includes("{")) errors.push(`story ${id} step ${n + 1} has unfilled text: ${text}`);
+      if (await page.locator(".callout.critical").count()) errors.push(`story ${id} step ${n + 1} shows an error`);
+      await shot(page, `24-story-${id}-${n + 1}`, false);
+      n += 1;
+      const btn = page.locator("[data-testid=story-next]");
+      const label = await btn.innerText();
+      await btn.click();
+      if (label.includes("إنهاء") || label.includes("Finish")) break;
+      if (n > 10) break;
+    }
+    step(`story ${id}: ${n} steps`);
+  }
+  await ctx.close();
+}
+
 // 2) Mobile, Arabic
 {
   const { ctx, page } = await newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, locale: "ar-SA" });

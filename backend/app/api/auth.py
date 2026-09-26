@@ -13,7 +13,7 @@ from ..core.db import get_db
 from ..core.security import create_access_token, hash_password, verify_password
 from ..models import Company, User, utcnow
 from ..services.alerts import ensure_rules
-from ..services.seed import seed_demo
+from ..services.seed import profile_for_email, seed_demo
 from .deps import audit, get_company, get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -120,8 +120,9 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
         audit(db, request, None, "auth.login_failed", body.email.lower())
         raise HTTPException(401, "Incorrect email or password")
     _failed_logins.pop(key, None)
-    if user.email == "demo@siyulah.sa":
-        user = seed_demo(db)  # re-anchors the demo story if it has gone stale
+    profile = profile_for_email(user.email)
+    if profile:
+        user = seed_demo(db, profile=profile)  # re-anchors the demo story if it has gone stale
     user.last_login_at = utcnow()
     db.commit()
     audit(db, request, user, "auth.login")
@@ -129,8 +130,8 @@ def login(body: LoginIn, request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/demo", response_model=TokenOut)
-def demo(request: Request, reset: bool = False, db: Session = Depends(get_db)):
-    user = seed_demo(db, force=reset)
+def demo(request: Request, reset: bool = False, profile: Literal["retail", "services"] = "retail", db: Session = Depends(get_db)):
+    user = seed_demo(db, force=reset, profile=profile)
     audit(db, request, user, "auth.demo_login")
     return TokenOut(access_token=create_access_token(user.id, user.company_id))
 

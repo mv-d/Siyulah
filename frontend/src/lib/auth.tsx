@@ -9,7 +9,7 @@ interface AuthValue {
   me: Me | undefined;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  demo: () => Promise<void>;
+  demo: (profile?: "retail" | "services") => Promise<void>;
   register: (body: Record<string, unknown>) => Promise<void>;
   logout: () => void;
 }
@@ -53,10 +53,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [accept],
   );
-  const demo = useCallback(async () => {
-    const r = await api<{ access_token: string }>("/auth/demo", { method: "POST" });
-    accept(r.access_token);
-  }, [accept]);
+  const demo = useCallback(
+    async (profile: "retail" | "services" = "retail") => {
+      const r = await api<{ access_token: string }>(`/auth/demo?profile=${profile}`, { method: "POST" });
+      accept(r.access_token);
+    },
+    [accept],
+  );
   const register = useCallback(
     async (body: Record<string, unknown>) => {
       const r = await api<{ access_token: string }>("/auth/register", { method: "POST", body });

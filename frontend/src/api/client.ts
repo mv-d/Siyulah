@@ -9,12 +9,15 @@ export class ApiError extends Error {
 }
 
 export function getToken(): string | null {
-  if (window.__SIYULAH_PREVIEW__) return "preview";
+  let stored: string | null = null;
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    stored = localStorage.getItem(TOKEN_KEY);
   } catch {
-    return null;
+    /* storage unavailable */
   }
+  // The static preview is always signed in to a demo company.
+  if (window.__SIYULAH_PREVIEW__) return stored?.startsWith("preview-") ? stored : "preview-retail";
+  return stored;
 }
 
 export function setToken(token: string | null) {

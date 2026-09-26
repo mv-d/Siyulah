@@ -13,7 +13,8 @@ from datetime import date, timedelta
 from ..core.i18n import date_ar, date_en, pct, sar_ar, sar_en
 from .forecasting import Baseline, ForecastInputs, run_forecast
 
-SALES_CATEGORIES = ("sales_pos", "sales_online", "receivable_payment")
+# Walk-in and online sales; B2B collections are too lumpy for a 30-day momentum read.
+SALES_CATEGORIES = ("sales_pos", "sales_online")
 
 DRIVER_LABELS = {
     "ramadan": ("Ramadan", "رمضان"),
@@ -98,8 +99,8 @@ def build_insights(inputs: ForecastInputs, result: dict) -> list[dict]:
                 _insight(
                     "momentum",
                     "good" if up else "warning",
-                    f"Collections and sales are {'up' if up else 'down'} {pct(abs(change))} over the last 30 days ({sar_en(recent)}).",
-                    f"المبيعات والتحصيلات {'ارتفعت' if up else 'انخفضت'} بنسبة {pct(abs(change))} خلال آخر 30 يوماً ({sar_ar(recent)}).",
+                    f"Store and online sales are {'up' if up else 'down'} {pct(abs(change))} over the last 30 days ({sar_en(recent)}).",
+                    f"مبيعات المتجر والمتجر الإلكتروني {'ارتفعت' if up else 'انخفضت'} بنسبة {pct(abs(change))} خلال آخر 30 يوماً ({sar_ar(recent)}).",
                     change=change,
                 )
             )

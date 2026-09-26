@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
-from .api import alerts, auth, forecast, integrations, scenarios, settings, tracker
+from .api import alerts, auth, collections, forecast, integrations, scenarios, settings, tracker
 from .core.config import get_settings, today
 from .core.db import SessionLocal, init_db
 from .models import Company
@@ -47,10 +47,11 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     init_db()
     if settings.seed_demo:
-        from .services.seed import seed_demo
+        from .services.seed import DEMOS, seed_demo
 
         with SessionLocal() as db:
-            seed_demo(db)
+            for profile in DEMOS:
+                seed_demo(db, profile=profile)
     task = asyncio.create_task(_alert_loop(settings.alerts_interval_minutes)) if settings.alerts_interval_minutes > 0 else None
     log.info("Siyulah API ready (today=%s)", today())
     yield
@@ -87,7 +88,7 @@ async def security_headers(request: Request, call_next):
     return response
 
 
-for r in (auth.router, forecast.router, scenarios.router, tracker.router, integrations.router, integrations.sandbox_router, alerts.router, settings.router):
+for r in (auth.router, collections.router, forecast.router, scenarios.router, tracker.router, integrations.router, integrations.sandbox_router, alerts.router, settings.router):
     app.include_router(r)
 
 

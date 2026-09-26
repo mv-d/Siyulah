@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChartLine, Languages, Lock, Sparkles } from "lucide-react";
+import { BookOpen, Briefcase, ChartLine, Languages, Lock, Sparkles, Store } from "lucide-react";
 import { ApiError } from "../api/client";
 import { useI18n } from "../i18n";
 import { useAuth } from "../lib/auth";
+import { useStory, type StoryId } from "../lib/stories";
 import { BrandMark } from "../components/ui";
 
 function Aside() {
@@ -88,11 +89,12 @@ export function LoginPage() {
       setBusy(null);
     }
   };
-  const tryDemo = async () => {
+  const story = useStory();
+  const tryDemo = async (profile: "retail" | "services" = "retail") => {
     setBusy("demo");
     setError(null);
     try {
-      await demo();
+      await demo(profile);
       nav("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("common.error"));
@@ -113,13 +115,44 @@ export function LoginPage() {
               {t("auth.loginSub")}
             </p>
           </div>
-          <button className="btn primary lg block" onClick={tryDemo} disabled={!!busy} data-testid="demo-login">
+          <button className="btn primary lg block" onClick={() => tryDemo("retail")} disabled={!!busy} data-testid="demo-login">
             {busy === "demo" ? <span className="spinner" /> : <Sparkles size={18} />}
             {t("auth.tryDemo")}
           </button>
-          <p className="xsmall muted" style={{ textAlign: "center", marginTop: -8 }}>
-            {t("auth.demoHint")}
-          </p>
+          <div className="stack" style={{ gap: 8 }}>
+            <span className="xsmall muted">{t("demo.choose")}</span>
+            <div className="demo-cards">
+              <button className="demo-card" onClick={() => tryDemo("retail")} disabled={!!busy} data-testid="demo-retail">
+                <Store size={18} style={{ color: "var(--brand)", flex: "none", marginTop: 2 }} aria-hidden="true" />
+                <span className="stack" style={{ gap: 2 }}>
+                  <strong className="small">{t("demo.retail")}</strong>
+                  <span className="xsmall muted">{t("demo.retailWho")}</span>
+                </span>
+              </button>
+              <button className="demo-card" onClick={() => tryDemo("services")} disabled={!!busy} data-testid="demo-services">
+                <Briefcase size={18} style={{ color: "var(--brand)", flex: "none", marginTop: 2 }} aria-hidden="true" />
+                <span className="stack" style={{ gap: 2 }}>
+                  <strong className="small">{t("demo.services")}</strong>
+                  <span className="xsmall muted">{t("demo.servicesWho")}</span>
+                </span>
+              </button>
+            </div>
+          </div>
+          <div className="stack" style={{ gap: 8 }}>
+            <span className="xsmall muted row" style={{ gap: 6 }}>
+              <BookOpen size={14} aria-hidden="true" />
+              {t("stories.title")} · {t("stories.subtitle")}
+            </span>
+            <div className="story-cards">
+              {(["retail", "services"] as StoryId[]).map((id) => (
+                <button key={id} className="story-card" onClick={() => story.start(id)} disabled={!!busy} data-testid={`story-${id}`}>
+                  <strong className="small">{t(`stories.${id}.title`)}</strong>
+                  <span className="xsmall muted">{t(`stories.${id}.who`)}</span>
+                  <span className="xsmall" style={{ color: "var(--brand)", fontWeight: 600 }}>{t("stories.start")} →</span>
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="or">{t("auth.or")}</div>
           <form className="stack" onSubmit={submit}>
             <label className="field">

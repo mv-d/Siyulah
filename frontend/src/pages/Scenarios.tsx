@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -82,7 +82,7 @@ export function ScenariosPage() {
   const toast = useToast();
   const qc = useQueryClient();
   const location = useLocation();
-  const incoming = location.state as { adjustments?: Adjustment[]; name?: string } | null;
+  const incoming = location.state as { adjustments?: Adjustment[]; name?: string; openScenario?: string } | null;
 
   const scenarios = useQuery({ queryKey: ["scenarios"], queryFn: () => api<Scenario[]>("/scenarios") });
   const receivables = useQuery({ queryKey: ["invoices", "receivable", "open"], queryFn: () => api<Invoice[]>("/invoices?kind=receivable&status=open") });
@@ -93,13 +93,27 @@ export function ScenariosPage() {
     incoming?.adjustments ? { id: null, name: incoming.name ?? "", description: "", adjustments: incoming.adjustments } : null,
   );
   const [horizon] = useState(90);
+  const applied = useRef<string | null>(null);
+
+  // Suggestions and guided stories open the planner with a scenario to show.
+  useEffect(() => {
+    if (!incoming || applied.current === location.key) return;
+    if (incoming.adjustments) {
+      applied.current = location.key;
+      setDraft({ id: null, name: incoming.name ?? "", description: "", adjustments: incoming.adjustments });
+    } else if (incoming.openScenario && scenarios.data) {
+      applied.current = location.key;
+      const s = scenarios.data.find((x) => x.name.includes(incoming.openScenario!));
+      if (s) setDraft({ id: s.id, name: s.name, description: s.description ?? "", adjustments: s.adjustments });
+    }
+  }, [location.key, incoming, scenarios.data]);
 
   useEffect(() => {
-    if (!draft && scenarios.data) {
+    if (!draft && scenarios.data && !incoming?.openScenario) {
       const s = scenarios.data[0];
       setDraft(s ? { id: s.id, name: s.name, description: s.description ?? "", adjustments: s.adjustments } : { id: null, name: "", description: "", adjustments: [] });
     }
-  }, [draft, scenarios.data]);
+  }, [draft, scenarios.data, incoming]);
 
   const debounced = useDebounced(draft?.adjustments ?? [], 350);
   const preview = useQuery({

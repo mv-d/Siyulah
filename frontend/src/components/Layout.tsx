@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, FlaskConical, LayoutDashboard, Languages, LogOut, Menu, Moon, Plug, ReceiptText, Settings, Sun } from "lucide-react";
+import { ArrowLeftRight, Bell, BookOpen, FlaskConical, HandCoins, LayoutDashboard, Languages, LogOut, Menu, Moon, Plug, ReceiptText, Settings, Sun } from "lucide-react";
 import { api } from "../api/client";
 import type { AlertItem } from "../api/types";
 import { useI18n } from "../i18n";
 import { useAuth } from "../lib/auth";
+import { useStory, type StoryId } from "../lib/stories";
 import { isDark, useTheme } from "../lib/theme";
 import { initials, todayRiyadh } from "../lib/util";
 import { BrandMark } from "./ui";
@@ -16,6 +17,8 @@ export function Layout() {
   const { set: setTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const [dark, setDark] = useState(isDark);
+  const [storyMenu, setStoryMenu] = useState(false);
+  const story = useStory();
   const location = useLocation();
   const alerts = useQuery({ queryKey: ["alerts", "active"], queryFn: () => api<AlertItem[]>("/alerts?status=active"), refetchInterval: 120_000 });
   const unread = alerts.data?.filter((a) => !a.read_at).length ?? 0;
@@ -25,6 +28,8 @@ export function Layout() {
     { to: "/", icon: LayoutDashboard, label: t("nav.dashboard"), end: true },
     { to: "/scenarios", icon: FlaskConical, label: t("nav.scenarios") },
     { to: "/tracker", icon: ReceiptText, label: t("nav.tracker") },
+    { to: "/collections", icon: HandCoins, label: t("nav.collections") },
+    { to: "/activity", icon: ArrowLeftRight, label: t("nav.activity") },
     { to: "/alerts", icon: Bell, label: t("nav.alerts"), count: unread },
     { to: "/integrations", icon: Plug, label: t("nav.integrations") },
     { to: "/settings", icon: Settings, label: t("nav.settings") },
@@ -78,6 +83,30 @@ export function Layout() {
             </span>
           </div>
           <div className="spacer" />
+          <div style={{ position: "relative" }}>
+            <button className="btn ghost sm" onClick={() => setStoryMenu((v) => !v)} aria-expanded={storyMenu} data-testid="story-menu">
+              <BookOpen size={17} />
+              {t("stories.menu")}
+            </button>
+            {storyMenu && (
+              <div className="story-menu" role="menu">
+                {(["retail", "services"] as StoryId[]).map((id) => (
+                  <button
+                    key={id}
+                    role="menuitem"
+                    className="story-card"
+                    onClick={() => {
+                      setStoryMenu(false);
+                      story.start(id);
+                    }}
+                  >
+                    <strong className="small">{t(`stories.${id}.title`)}</strong>
+                    <span className="xsmall muted">{t(`stories.${id}.who`)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <button className="btn ghost sm" onClick={() => setLocale(locale === "ar" ? "en" : "ar")} aria-label="Language">
             <Languages size={17} />
             {t("common.language")}

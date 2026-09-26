@@ -18,6 +18,7 @@ from .deps import get_company
 router = APIRouter(prefix="/api", tags=["forecast"])
 
 _backtest_cache: dict[tuple, dict | None] = {}
+SCENARIO_HORIZON = 90  # the scenario planner's horizon
 
 
 def cached_backtest(db: Session, company: Company) -> dict | None:
@@ -163,6 +164,10 @@ def transactions(
         stmt = stmt.where(Transaction.description.ilike(f"%{q}%"))
     total = db.scalar(select(func.count()).select_from(stmt.subquery()))
     rows = db.scalars(stmt.order_by(Transaction.date.desc(), Transaction.id.desc()).offset(offset).limit(limit))
+    banks = {
+        a.id: SAUDI_BANKS.get(a.bank_code, (a.bank_code, a.bank_code, ""))
+        for a in db.scalars(select(BankAccount).where(BankAccount.company_id == company.id))
+    }
     return {
         "total": total,
         "items": [
@@ -174,6 +179,8 @@ def transactions(
                 "counterparty": t.counterparty,
                 "category": t.category,
                 "account_id": t.account_id,
+                "bank_name": banks.get(t.account_id, ("", "", ""))[0],
+                "bank_name_ar": banks.get(t.account_id, ("", "", ""))[1],
             }
             for t in rows
         ],
@@ -188,15 +195,103 @@ def categories(
 ):
     from ..services.categorizer import CATEGORY_LABELS
 
-    since = today() - timedelta(days=days - 1)
+    now = today()
+    since = now - timedelta(days=days - 1)
+    prior_since = since - timedelta(days=days)
     totals: dict[str, float] = {}
-    for cat, amount in db.execute(
-        select(Transaction.category, Transaction.amount).where(Transaction.company_id == company.id, Transaction.date >= since)
+    prior: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for d, cat, amount in db.execute(
+        select(Transaction.date, Transaction.category, Transaction.amount).where(
+            Transaction.company_id == company.id, Transaction.date >= prior_since, Transaction.date <= now
+        )
     ):
-        totals[cat] = totals.get(cat, 0.0) + amount
+        if d >= since:
+            totals[cat] = totals.get(cat, 0.0) + amount
+            counts[cat] = counts.get(cat, 0) + 1
+        else:
+            prior[cat] = prior.get(cat, 0.0) + amount
     items = [
-        {"category": c, "label_en": CATEGORY_LABELS.get(c, (c, c))[0], "label_ar": CATEGORY_LABELS.get(c, (c, c))[1], "amount": round(v, 2)}
+        {
+            "category": c,
+            "label_en": CATEGORY_LABELS.get(c, (c, c))[0],
+            "label_ar": CATEGORY_LABELS.get(c, (c, c))[1],
+            "amount": round(v, 2),
+            "prior_amount": round(prior.get(c, 0.0), 2),
+            "count": counts.get(c, 0),
+        }
         for c, v in totals.items()
     ]
     items.sort(key=lambda x: x["amount"])
-    return {"days": days, "items": items}
+    return {
+        "days": days,
+        "since": since,
+        "until": now,
+        "inflow": round(sum(i["amount"] for i in items if i["amount"] > 0), 2),
+        "outflow": round(-sum(i["amount"] for i in items if i["amount"] < 0), 2),
+        "prior_inflow": round(sum(v for v in prior.values() if v > 0), 2),
+        "prior_outflow": round(-sum(v for v in prior.values() if v < 0), 2),
+        "items": items,
+    }
+
+
+@router.get("/forecast/engine")
+def engine_export(company: Company = Depends(get_company), db: Session = Depends(get_db)):
+    """Everything needed to re-run the forecast elsewhere (e.g. in the browser):
+    the fitted model's daily means and residuals plus all scheduled inputs."""
+    from ..services.calendar_ksa import WEEKEND, is_bank_holiday
+    from ..services.forecasting import DEFAULT_DELAYS, DEFAULT_PAYABLE_LAGS, DEFAULT_RECEIVABLE_LAGS, draw_simulations
+
+    inputs = build_inputs(db, company)
+    baseline = baseline_for(db, company, inputs)
+    draws = draw_simulations(inputs, SCENARIO_HORIZON, baseline=baseline)
+    now = inputs.today
+    span = 150
+    dates = [now + timedelta(days=i + 1) for i in range(span)]
+
+    def model(m, fallback: float) -> dict:
+        if m is None:
+            return {"mean": [fallback] * span, "ratios": [1.0]}
+        return {"mean": [round(float(v), 4) for v in m.mean(dates)], "ratios": [round(float(r), 5) for r in m.ratios]}
+
+    return {
+        "today": now,
+        "opening_balance": inputs.opening_balance,
+        "safety_buffer": inputs.safety_buffer,
+        "invoices_connected": inputs.invoices_connected,
+        "receivables": [r.__dict__ for r in inputs.receivables],
+        "payables": [p.__dict__ for p in inputs.payables],
+        "obligations": [o.__dict__ for o in inputs.obligations],
+        "company_delays": inputs.company_delays,
+        "receivable_lags": inputs.receivable_lags,
+        "payable_lags": inputs.payable_lags,
+        "defaults": {"delays": DEFAULT_DELAYS, "receivable_lags": DEFAULT_RECEIVABLE_LAGS, "payable_lags": DEFAULT_PAYABLE_LAGS},
+        "inflow": model(baseline.inflow, baseline.fallback_in),
+        "outflow": model(baseline.outflow, baseline.fallback_out),
+        "runrates": {k: {"per_day": v.per_day, "amounts": [round(float(a), 2) for a in v.amounts]} for k, v in baseline.runrates.items()},
+        # Non-weekend bank holidays (Eid, National Day, Founding Day) around the horizon.
+        "holidays": [
+            d for d in (now + timedelta(days=i) for i in range(-40, span + 40)) if d.weekday() not in WEEKEND and is_bank_holiday(d)
+        ],
+        "model": {
+            "method": "hybrid-montecarlo-ridge",
+            "training_days": baseline.training_days,
+            "backtest_accuracy": round(baseline.accuracy, 3) if baseline.accuracy is not None else None,
+            "sales_drivers": baseline.inflow.drivers() if baseline.inflow else {},
+            "expense_drivers": baseline.outflow.drivers() if baseline.outflow else {},
+        },
+        "history": history_series(inputs.history, inputs.opening_balance, now, 30),
+        # The server's own Monte Carlo draws (whole riyals), so scenarios replayed
+        # elsewhere reproduce the server's numbers on the same simulated paths.
+        "sims": {
+            "n": draws.n_sims,
+            "horizon": SCENARIO_HORIZON,
+            "base_in": [int(round(v)) for v in draws.base_in.ravel()],
+            "base_out": [int(round(v)) for v in draws.base_out.ravel()],
+            "pipeline": draws.pipeline,
+            "receivables": {
+                str(rid): None if sample is None else {"days": [int(d) for d in sample[0]], "paid": "".join("1" if p else "0" for p in sample[1])}
+                for rid, sample in draws.receivables.items()
+            },
+        },
+    }

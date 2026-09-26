@@ -201,3 +201,28 @@ def test_login_is_throttled_after_repeated_failures(client):
         assert client.post("/api/auth/login", json={"email": "throttle@test.sa", "password": "wrong-pass"}).status_code == 401
     r = client.post("/api/auth/login", json={"email": "throttle@test.sa", "password": "password123"})
     assert r.status_code == 429
+
+
+def test_second_demo_and_collections(client):
+    r = client.post("/api/auth/demo?profile=services")
+    assert r.status_code == 200
+    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    assert client.get("/api/auth/me", headers=h).json()["company"]["sector"] == "services"
+    c = client.get("/api/collections", headers=h).json()
+    assert c["items"] and c["summary"]["overdue_total"] > 0
+    first = c["items"][0]
+    # Ranked by measured effect: collecting the top invoice never raises the risk.
+    assert first["impact"]["shortfall_change"] <= 0
+    assert all(a["impact"]["shortfall_change"] <= b["impact"]["shortfall_change"] + 1e-9 for a, b in zip(c["items"], c["items"][1:]))
+    assert {"avg_days_late", "on_time_rate", "total_outstanding"} <= set(first["customer"])
+    names = {s["name"] for s in client.get("/api/scenarios", headers=h).json()}
+    assert any("Hire 2 designers" in n for n in names)
+
+
+def test_cash_activity_and_engine_export(client, demo_headers):
+    cats = client.get("/api/transactions/categories?days=30", headers=demo_headers).json()
+    assert cats["inflow"] > 0 and cats["outflow"] > 0 and "prior_amount" in cats["items"][0]
+    tx = client.get("/api/transactions?limit=3", headers=demo_headers).json()
+    assert tx["items"][0]["bank_name"]
+    e = client.get("/api/forecast/engine", headers=demo_headers).json()
+    assert len(e["inflow"]["mean"]) == 150 and e["receivables"] and e["obligations"]

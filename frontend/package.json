@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "e2e": "node e2e/smoke.mjs",
     "preview:record": "node e2e/record-fixtures.mjs",
-    "build:preview": "vite build -c vite.preview.config.ts"
+    "build:preview": "vite build -c vite.preview.config.ts",
+    "preview:validate": "esbuild src/preview/engine.ts --format=esm --outfile=dist-preview/engine.mjs --log-level=warning && node e2e/validate-engine.mjs"
   },
   "dependencies": {
     "@fontsource/ibm-plex-sans-arabic": "^5.3.0",

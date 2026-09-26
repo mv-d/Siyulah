@@ -16,7 +16,12 @@ Siyulah is a cash-flow co-pilot for Saudi SMEs. It connects **read-only** to a c
 ./scripts/start.sh          # builds the SPA and serves everything on http://localhost:8000
 ```
 
-Click **"Explore the live demo"** (or sign in with `demo@siyulah.sa` / `demo1234`). The demo company is *Nakhla Perfumes & Oud (نخلة للعطور والعود)*, a Riyadh perfume retailer that sells in-store (mada) and on Salla. It has Al Rajhi (via Lean) and Qoyod connected.
+Pick a demo company on the sign-in page, or start one of the **guided stories** that walk through each company step by step:
+
+| Demo company | Sign in | Story |
+|---|---|---|
+| *Nakhla Perfumes & Oud (نخلة للعطور والعود)*: Riyadh perfume retailer, in-store (mada) + Salla, Al Rajhi via Lean + Qoyod | `demo@siyulah.sa` / `demo1234` | Getting through the November squeeze |
+| *Wamda Creative Agency (ومضة للإبداع والتسويق)*: Jeddah marketing agency, 28 staff, SNB via Tarabut + Zoho Books | `agency@siyulah.sa` / `demo1234` | Can we afford to hire? |
 
 To see onboarding, **create an account** instead: choose retail or services, connect a bank on the sandbox consent screen, then your accounting software.
 
@@ -41,6 +46,8 @@ Requirements: Python 3.11+, Node 20+.
 | **Predictive dashboard** (past 30 days + next 30/60/90) | Actual balance for the last 30 days and the forecast median with an 80% likely range (P10–P90). Also: runway, lowest projected balance, shortfall probability, weekly cash in/out, backtest accuracy, and the seasonal effects the model learned. |
 | **Scenario planning engine** | 11 levers: customer pays late / on a date / never; move a supplier payment; move or skip a major payment (VAT, rent…); sales or spending change for a date range; one-off items; new recurring costs (hires); financing with amortised installments. Baseline vs. scenario is compared on the same simulated paths. Scenarios can be saved. |
 | **Smart alerts** (push, SMS, email) | Rules for low balance, cash runway ("Warning: 15-day cash runway remaining"), shortfall risk, overdue invoices and large upcoming payments. Each rule has configurable thresholds and channels, plus deduplication, escalation, auto-resolve, a delivery log and test sends. SMTP and an SMS gateway are pluggable; channels without credentials run in sandbox mode. |
+| **Collections** (from the tracker's pain point: delayed B2B payments) | A ranked list of who to chase first. Each invoice is re-run through the engine as "collected this week", so the reported drop in shortfall risk is that collection alone. Customer payment history, ready-to-send Arabic/English reminders for WhatsApp, SMS or email (with the ZATCA e-invoice reference), and promise-to-pay dates that feed straight into the forecast. |
+| **Unified bank view** (scattered data across bank portals) | Cash activity: every connected account in one transaction list, plus where money comes from and goes, by category, against the previous period. |
 | **Payables / receivables tracker** | Aging buckets, DSO, overdue flags, each customer's usual lateness, the forecast's expected payment date and probability, promised/planned dates, mark paid, manual invoices. Major obligations are **auto-detected** from bank data: payroll (WPS, 27th), GOSI, Ejar rent and the next ZATCA VAT (estimated from the quarter). |
 | **Arabic/English, RTL** | Complete Arabic and English UIs. Charts mirror time in RTL. Hijri (Umm al-Qura) and Gregorian dates, Latin digits, bidi-safe amounts (`‎-12,500 ر.س`). |
 | **Security & compliance** | AES-256-GCM encryption at rest for tokens, IBANs and phone numbers; scrypt passwords; JWT; PKCE; strict redirect-URI checks; login throttling; security headers; audit log. PDPL: explicit consent at sign-up, data-residency label, a one-click JSON export (right of access), account erasure, and imported data is deleted on disconnect. |
@@ -73,7 +80,8 @@ On the demo company the sales model's backtest accuracy is about 87% on weekly t
 frontend/  React 18 + TypeScript + Vite · React Query · custom SVG charts · IBM Plex Sans Arabic
   src/i18n/            ar.ts / en.ts dictionaries, formatters (Hijri, compact SAR, bidi isolation)
   src/components/charts BalanceChart (history + fan chart + scenario compare), WeeklyFlows, AgingBar
-  src/pages/           Dashboard · Scenarios · Tracker · Alerts · Integrations (+ onboarding, OAuth callback) · Settings
+  src/pages/           Dashboard · Scenarios · Tracker · Collections · Cash activity · Alerts · Integrations (+ onboarding, OAuth callback) · Settings
+  src/lib/stories.tsx  guided user stories (step-by-step walkthroughs with live numbers)
   e2e/smoke.mjs        Playwright walkthrough (both languages, dark mode, mobile, full OAuth onboarding)
 
 backend/   FastAPI · SQLAlchemy 2 · NumPy
@@ -108,7 +116,7 @@ Every setting is an environment variable with the `SIYULAH_` prefix (see `backen
 
 ## Testing
 
-- **Backend:** `cd backend && python -m pytest`, 53 tests covering:
+- **Backend:** `cd backend && python -m pytest`, 55 tests covering:
   - the engine: learning weekday effects, exact scheduling, customer-delay behaviour, scenario directions, runway and shortfall, pipeline phase-in, common random numbers
   - the Saudi calendar
   - security: scrypt, AES-GCM tamper detection, the PKCE RFC vector, tokens encrypted in the DB
@@ -120,11 +128,14 @@ Every setting is an environment variable with the `SIYULAH_` prefix (see `backen
 
 ### Static preview
 
-The app can also be packaged as one self-contained HTML file that needs no server. The recorder drives the real app and stores every API response it makes; the preview build replays them. Reads work everywhere, and scenario results are pre-computed for the saved scenarios, the suggestions and one change of each type. Writes are disabled.
+The app can also be packaged as one self-contained HTML file that needs no server. The recorder drives the real app for both demo companies and stores every API response it makes. It also stores the server's Monte Carlo draws from `/api/forecast/engine`.
+
+The engine is split into `draw_simulations` (all randomness) and the scenario assembly. The preview runs a TypeScript port of the assembly (`src/preview/engine.ts`) on the server's draws, so **any** scenario works in the preview and matches the server. `npm run preview:validate` checks this against every scenario result recorded from the server: identical probabilities, dates and events, with money within a few riyals from rounding. Writes are disabled.
 
 ```bash
 ./scripts/start.sh &                                   # the real app on :8000
 cd frontend && BASE_URL=http://127.0.0.1:8000 npm run preview:record
+npm run preview:validate                               # browser engine == server engine
 npm run build:preview                                  # → dist-preview/preview.html
 ```
 
@@ -157,5 +168,7 @@ Production checklist: PostgreSQL in a KSA region, a KMS-managed encryption key, 
 | ![Scenario planner](docs/screenshots/scenarios-en.png) | ![Receivables tracker](docs/screenshots/tracker-ar.png) |
 | ![Dark mode](docs/screenshots/dashboard-dark-en.png) | ![Sandbox open-banking consent](docs/screenshots/consent.png) |
 | ![Integrations](docs/screenshots/integrations-ar.png) | ![Alerts](docs/screenshots/alerts-ar.png) |
+| ![Collections assistant](docs/screenshots/collections-ar.png) | ![Cash activity](docs/screenshots/activity-ar.png) |
+| ![Guided story: can we afford to hire?](docs/screenshots/story-agency.png) | |
 
 </details>

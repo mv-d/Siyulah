@@ -357,3 +357,82 @@ export interface AuditEntry {
   ip: string | null;
   created_at: string;
 }
+
+export interface CollectionItem {
+  invoice_id: number;
+  number: string;
+  counterparty: string;
+  counterparty_ar: string | null;
+  amount: number;
+  outstanding: number;
+  issue_date: string;
+  due_date: string;
+  days_overdue: number;
+  promised_date: string | null;
+  zatca_uuid: string | null;
+  notes: string | null;
+  forecast: ReceivableForecast | null;
+  customer: {
+    paid_invoices: number;
+    avg_days_late: number | null;
+    on_time_rate: number | null;
+    worst_days_late: number | null;
+    total_outstanding: number;
+  };
+  impact: {
+    collect_by: string;
+    lowest_balance: number;
+    lowest_balance_change: number;
+    shortfall_probability: number;
+    shortfall_change: number;
+    days_below_buffer_change: number;
+    days_sooner: number | null;
+    cash_days: number;
+  };
+  tone: "friendly" | "firm" | "final";
+}
+
+export interface Collections {
+  as_of: string;
+  items: CollectionItem[];
+  summary: {
+    overdue_total: number;
+    overdue_count: number;
+    due_soon_total: number;
+    baseline_lowest_balance: number;
+    baseline_shortfall_probability: number;
+    collect_within_days: number;
+  } | null;
+}
+
+export interface CategoryTotal {
+  category: string;
+  label_en: string;
+  label_ar: string;
+  amount: number;
+  prior_amount: number;
+  count: number;
+}
+
+export interface CategoryBreakdown {
+  days: number;
+  since: string;
+  until: string;
+  inflow: number;
+  outflow: number;
+  prior_inflow: number;
+  prior_outflow: number;
+  items: CategoryTotal[];
+}
+
+export interface TransactionItem {
+  id: number;
+  date: string;
+  amount: number;
+  description: string;
+  counterparty: string | null;
+  category: string;
+  account_id: number;
+  bank_name: string;
+  bank_name_ar: string;
+}

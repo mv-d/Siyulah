@@ -23,3 +23,4 @@ frontend/playwright-report/
 *.tsbuildinfo
 frontend/dist-preview/
 frontend/src/preview/fixtures.json
+frontend/src/preview/fixtures.validation.json
