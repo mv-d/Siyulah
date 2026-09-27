@@ -24,3 +24,7 @@ frontend/playwright-report/
 frontend/dist-preview/
 frontend/src/preview/fixtures.json
 frontend/src/preview/fixtures.validation.json
+
+# Launch video (Remotion): rendered output and the generated soundtrack
+launch/out/
+launch/public/music.wav

@@ -158,6 +158,12 @@ Production checklist: PostgreSQL in a KSA region, a KMS-managed encryption key, 
 - Natural-language co-pilot ("why is November tight?") on top of the existing engine
 - Scenario sharing and PDF board packs
 
+## Launch video
+
+[`launch/`](launch/) holds a 76-second bilingual soft-launch and introduction video made with Remotion. Its chart
+and numbers are the engine's real output for the demo companies. `cd launch && npm install && npm run render`
+writes `launch/out/siyulah-soft-launch.mp4`; see [launch/README.md](launch/README.md).
+
 ---
 
 <details>
