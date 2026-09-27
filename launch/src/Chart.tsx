@@ -69,6 +69,7 @@ export const Chart: React.FC<{
   const d = new Date(low.date + "T00:00:00Z");
   const lowLabel = `Low SAR ${(Math.round(low.p50 / 100) / 10).toFixed(1)}K · ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 
+  const labelW = lowLabel.length * 14.2 + 32;
   const ticks = [0, 100000, 200000, 300000];
   const monthTicks: { i: number; label: string }[] = [];
   const all = [...data.history.map((h) => h.date), ...data.base.map((b) => b.date)];
@@ -124,7 +125,8 @@ export const Chart: React.FC<{
         <g opacity={lowP}>
           <circle cx={lowX} cy={lowY} r={12 + pulse * 10} fill={mix > 0.5 ? C.brand : C.orange} opacity={0.18} />
           <circle cx={lowX} cy={lowY} r={11 * lowP} fill={mix > 0.5 ? C.brand : C.orange} stroke="#ffffff" strokeWidth={3} />
-          <text x={lowX} y={lowY + 52} textAnchor="middle" fontSize={26} fontWeight={700} fill={C.ink}>
+          <rect x={lowX - labelW / 2} y={lowY + 26} width={labelW} height={40} rx={20} fill="#fdfdfb" fillOpacity={0.94} stroke={C.line} strokeWidth={1.5} />
+          <text x={lowX} y={lowY + 55} textAnchor="middle" fontSize={26} fontWeight={700} fill={C.ink}>
             {lowLabel}
           </text>
         </g>
